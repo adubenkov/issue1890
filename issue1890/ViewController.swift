@@ -10,6 +10,12 @@ import UIKit
 import AudioKit
 
 class ViewController: UIViewController {
+    
+    var musicPlayer: AKClipPlayer?
+    var clipPlayer: AKClipPlayer?
+    var playerMixer: AKMixer?
+    var clipRecorder: AKClipRecorder?
+    var mic: AKMicrophone?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -55,40 +61,59 @@ class ViewController: UIViewController {
         try AudioKit.start()
     }
 
+    private func setupPlaybackNodes(withProjectAudioFile projectAudioFile: AKAudioFile) throws {
+        let projectTrackPlayer = AKClipPlayer()
+        try projectTrackPlayer.setClips(clips: [AKFileClip(audioFile: projectAudioFile)])
+        musicPlayer = projectTrackPlayer
+        let mixer = AKMixer(projectTrackPlayer)
+        playerMixer = mixer
+    }
+
+    private func setupTakePlaybackNodes(withTakeAudioFile takeFile: AKAudioFile?) throws {
+        let takeTracksPlayer = AKClipPlayer()
+        let takeClipsSequence = AKFileClipSequence(clips: [])
+
+        if let audioFile = takeFile {
+            let takeFileClip = AKFileClip(audioFile: audioFile)
+            try takeTracksPlayer.setClips(clips: [takeFileClip])
+            takeClipsSequence.add(clip: takeFileClip)
+        }
+        clipPlayer = takeTracksPlayer
+        playerMixer?.connect(input: takeTracksPlayer)
+    }
+
+    private func setupRecordingNodes() throws {
+        if let microphone = AKMicrophone() {
+            mic = microphone
+            clipRecorder = AKClipRecorder(node: microphone)
+        }
+    }
+
+    func setup() throws {
+        let track1 = try AKAudioFile(readFileName: "click.m4a")
+        let track2 = try AKAudioFile(readFileName: "clip.m4a")
+        try setupPlaybackNodes(withProjectAudioFile: track1)
+        try setupTakePlaybackNodes(withTakeAudioFile: track2)
+        try setupRecordingNodes()
+
+        AudioKit.output = playerMixer
+        try AudioKit.start()
+    }
+
+
     @IBAction func renderButtonPressed(_ sender: Any) {
         do {
             try setupAudioKitSettings()
-            // I have reproduced all of the nodes that I have in my app
-            let microphone = AKMicrophone()
-            let fieldLimiter = AKStereoFieldLimiter(microphone, amount: 0)
-            let micMixer = AKMixer(fieldLimiter)
-            let micBooster = AKBooster(micMixer)
-            let clipRecorder = AKClipRecorder(node: micBooster)
-
-            let writeFile = try AKAudioFile()
-            let track1 = try AKAudioFile(readFileName: "click.m4a")
-            let track2 = try AKAudioFile(readFileName: "clip.m4a")
-            let clip1 = AKFileClip(audioFile: track1)
-            let clip2 = AKFileClip(audioFile: track2)
-            let player1 = AKClipPlayer()
-            let player2 = AKClipPlayer()
-
-            let clipFile = try AKAudioFile()
-            let firstClip = AKFileClip(audioFile: clipFile)
-
-            player1.clips.insert(clip1, at: 0)
-            player2.clips.insert(clip2, at: 0)
-            player1.clips.insert(firstClip, at: 0)
-            let mixer = AKMixer([player1, player2])
-            let booster = AKBooster(mixer)
-            AudioKit.output = booster
+            try setup()
 
             func preRender() {
-                player1.play()
-                player2.play()
+                self.musicPlayer?.play()
+                self.clipPlayer?.play()
             }
 
-            try AudioKit.renderToFile(writeFile, duration: track1.duration, prerender: preRender)
+            let writeFile = try AKAudioFile()
+
+            try AudioKit.renderToFile(writeFile, duration: 20.0, prerender: preRender)
             exportAudioFile(audioFile: writeFile, fileName: "export.m4a", baseDir: .documents)
         } catch {
             print(error.localizedDescription)
