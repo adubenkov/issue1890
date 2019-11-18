@@ -50,7 +50,7 @@ class ViewController: UIViewController {
                     .allowBluetooth,
                     .mixWithOthers
                 ])
-        AKSettings.sampleRate = 48_000
+//        AKSettings.sampleRate = 48_000
         AKSettings.playbackWhileMuted = true
         AKSettings.bufferLength = .medium
         AKSettings.useBluetooth = true
@@ -85,26 +85,26 @@ class ViewController: UIViewController {
     private func setupRecordingNodes() throws {
         if let microphone = AKMicrophone() {
             mic = microphone
+
+            // Export is working if you comment this line
             clipRecorder = AKClipRecorder(node: microphone)
         }
     }
 
-    func setup() throws {
+    func setupNodes() throws {
         let track1 = try AKAudioFile(readFileName: "click.m4a")
         let track2 = try AKAudioFile(readFileName: "clip.m4a")
         try setupPlaybackNodes(withProjectAudioFile: track1)
         try setupTakePlaybackNodes(withTakeAudioFile: track2)
         try setupRecordingNodes()
-
         AudioKit.output = playerMixer
-        try AudioKit.start()
     }
 
 
     @IBAction func renderButtonPressed(_ sender: Any) {
         do {
+            try setupNodes()
             try setupAudioKitSettings()
-            try setup()
 
             func preRender() {
                 self.musicPlayer?.play()
